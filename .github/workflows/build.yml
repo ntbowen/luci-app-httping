@@ -19,6 +19,7 @@ jobs:
         # 使用 OpenWrt 23.05 x86/64 SDK (兼容性较好)
         wget https://downloads.openwrt.org/releases/23.05.2/targets/x86/64/openwrt-sdk-23.05.2-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
         tar -xf openwrt-sdk-*.tar.xz
+        rm -f openwrt-sdk-*.tar.xz   # <--- 新增这一行：先删除压缩包
         mv openwrt-sdk-* sdk
         
     - name: Update Feeds & Install Package
