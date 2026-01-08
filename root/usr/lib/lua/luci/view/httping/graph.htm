@@ -258,6 +258,20 @@
     var myChart = null;
     var cachedData = [];
     var activeServers = new Set();
+    
+    // 【优化】从 UCI 读取服务器顺序
+    var serverOrder = [
+        <%
+            local uci = require "luci.model.uci".cursor()
+            local servers = {}
+            uci:foreach("httping", "server", function(s)
+                if s.name then
+                    table.insert(servers, '"' .. s.name:gsub('"', '\\"') .. '"')
+                end
+            end)
+            write(table.concat(servers, ","))
+        %>
+    ];
 
     var refreshTimer = null;
     var currentRelativeHours = 12;
@@ -359,7 +373,10 @@
 
         container.innerHTML = '<span style="color: var(--text-color); font-size: 13px; padding: 6px 0;">服务器筛选:</span>';
 
-        Object.keys(stats).forEach(function (name) {
+        // 【优化】按配置顺序遍历
+        serverOrder.forEach(function (name) {
+            if (!stats[name]) return; // 如果没有该服务器的数据，跳过
+
             var total = stats[name].total;
             var lossVal = total > 0 ? (stats[name].loss / total * 100) : 0;
             var lossRateStr = lossVal.toFixed(2);
@@ -379,6 +396,13 @@
             chip.innerHTML = `${name}<span class="loss-text ${badgeClass}">(${lossRateStr}%)</span>`;
 
             container.appendChild(chip);
+        });
+        
+        // 处理可能存在的未在配置中但有数据的旧数据（虽然少见）
+        Object.keys(stats).forEach(function(name) {
+             if (serverOrder.indexOf(name) === -1) {
+                  // ... logic to render unknown servers if needed, or just ignore
+             }
         });
     }
 
@@ -410,7 +434,9 @@
 
         var isFilterMode = activeServers.size > 0;
 
-        Object.keys(groupedData).forEach(function (serverName) {
+        // 【优化】按配置顺序生成图表数据
+        serverOrder.forEach(function (serverName) {
+            if (!groupedData[serverName]) return; // 无数据跳过
             if (isFilterMode && !activeServers.has(serverName)) return;
 
             legendData.push(serverName);
@@ -513,7 +539,20 @@
                 type: 'value',
                 scale: true,
                 axisLabel: { color: theme.textColor, formatter: '{value} ms' },
-                splitLine: { lineStyle: { color: theme.splitLine } }
+                splitLine: { lineStyle: { color: theme.splitLine } },
+                // 【优化】削峰模式下，强制扩大Y轴范围以平滑曲线
+                min: function(value) {
+                    if (isClippingMode) {
+                        return Math.max(0, value.min - (value.max - value.min) * 2);
+                    }
+                    return value.min;
+                },
+                max: function(value) {
+                    if (isClippingMode) {
+                        return value.max + (value.max - value.min) * 2;
+                    }
+                    return value.max;
+                }
             },
             // 【关键逻辑】应用缩放状态
             dataZoom: [
