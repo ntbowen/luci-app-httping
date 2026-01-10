@@ -43,7 +43,7 @@ check_server() {
                 RETCODE=1
 
                 if [ "$type" = "tcping" ]; then
-                    # TCPing 处理逻辑
+                    # TCPing 处理逻辑 - 纯 Lua 实现 (高精度，微秒级)
                     # 支持 IPv6 格式: [2001:db8::1]:80 或 host:port
                     if echo "$url" | grep -q "\["; then
                         HOST=$(echo "$url" | sed -n 's/.*\[\(.*\)\].*/\1/p')
@@ -53,44 +53,82 @@ check_server() {
                         PORT=$(echo "$url" | cut -d: -f2)
                     fi
                     
-                    # 如果没有指定端口，默认80
-                    if [ -z "$PORT" ] || [ "$HOST" = "$PORT" ]; then
-                        PORT=80
-                    fi
+                    if [ -z "$PORT" ] || [ "$HOST" = "$PORT" ]; then PORT=80; fi
                     
-                    # 使用 Lua 解析 IP (支持 IPv4 和 IPv6)，排除 DNS 解析时间
-                    TARGET_IP=$(lua -l nixio -e "local iter = nixio.getaddrinfo('$HOST'); if iter and iter[1] then print(iter[1].address) end")
+                    # 使用 Lua 进行高精度测速 (依赖系统自带的 nixio 库)
+                    # 返回结果: "OK 45.123" 或 "FAIL"
+                    LUA_SCRIPT="
+                    local nixio = require 'nixio'
+                    local host = '$HOST'
+                    local port = '$PORT'
                     
-                    if [ -n "$TARGET_IP" ]; then
-                        START_MS=$(get_uptime_ms)
-                        
-                        # 使用 socat 进行探测 (比 nc 更可靠，且支持 IPv6)
-                        # 语法: socat -u OPEN:/dev/null TCP:<IP>:<PORT>,connect-timeout=2
-                        # socat 会自动处理 IPv4 (TCP4) 和 IPv6 (TCP6) 格式
-                        
-                        # 判断是 IPv6 还是 IPv4 来构造地址串
-                        if echo "$TARGET_IP" | grep -q ":"; then
-                            # IPv6: 需要用 TCP6:[IP]:Port 格式
-                            SOCAT_ADDR="TCP6:[$TARGET_IP]:$PORT"
-                        else
-                            # IPv4: TCP4:IP:Port
-                            SOCAT_ADDR="TCP4:$TARGET_IP:$PORT"
-                        fi
+                    local sock, err
+                    -- 1. 解析地址 (支持 IPv4/IPv6)
+                    local addr_iter = nixio.getaddrinfo(host, 'inet') or nixio.getaddrinfo(host, 'inet6')
+                    if not addr_iter then
+                        addr_iter = nixio.getaddrinfo(host) -- 尝试自动
+                    end
 
-                        socat -u OPEN:/dev/null "$SOCAT_ADDR,connect-timeout=2" >/dev/null 2>&1
-                        RETCODE=$?
-                        END_MS=$(get_uptime_ms)
-                        
-                        if [ $RETCODE -eq 0 ]; then
-                            DURATION=$((END_MS - START_MS))
-                        fi
+                    if not addr_iter or not addr_iter[1] then
+                        print('FAIL')
+                        return
+                    end
+                    
+                    local target = addr_iter[1]
+                    target.port = tonumber(port)
+
+                    -- 2. 创建 Socket
+                    sock = nixio.socket(target.family, nixio.SOCK_STREAM)
+                    if not sock then print('FAIL'); return end
+                    
+                    sock:setblocking(false) -- 非阻塞模式
+                    
+                    -- 3. 开始计时
+                    local t1_sec, t1_usec = nixio.gettimeofday()
+                    
+                    -- 4. 发起连接
+                    local status, code, msg = sock:connect(target.address, target.port)
+                    
+                    -- 5. 等待连接 (select)
+                    if status ~= true then
+                        -- 如果不是立即连接成功，需要 poll 状态
+                        if code == nixio.EINPROGRESS then
+                            local revents = nixio.poll({ {fd=sock, events=nixio.POLLOUT} }, 2000) -- 2秒超时
+                            if not revents or revents == 0 then
+                                print('FAIL') -- 超时
+                                sock:close()
+                                return
+                            end
+                            
+                            -- 再次检查错误状态
+                            local err_code = sock:getsockopt('socket', 'error')
+                            if err_code ~= 0 then
+                                print('FAIL')
+                                sock:close()
+                                return
+                            end
+                        else
+                            print('FAIL')
+                            sock:close()
+                            return
+                        end
+                    end
+                    
+                    -- 6. 结束计时
+                    local t2_sec, t2_usec = nixio.gettimeofday()
+                    sock:close()
+                    
+                    -- 计算差值 (毫秒)
+                    local ms = (t2_sec - t1_sec) * 1000 + (t2_usec - t1_usec) / 1000
+                    print(string.format('OK %.3f', ms))
+                    "
+                    
+                    RESULT=$(lua -l nixio -e "$LUA_SCRIPT")
+                    
+                    if echo "$RESULT" | grep -q "^OK"; then
+                        DURATION=$(echo "$RESULT" | awk '{print $2}')
+                        RETCODE=0
                     else
-                        
-                        if [ $RETCODE -eq 0 ]; then
-                            DURATION=$((END_MS - START_MS))
-                        fi
-                    else
-                        # 解析失败
                         RETCODE=1
                     fi
                 else

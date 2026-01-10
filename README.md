@@ -26,10 +26,11 @@
 * `luci-lib-jsonc`
 * `curl` (用于 HTTP/HTTPS 检测)
 * `sqlite3-cli` (用于数据存储)
-* `socat` (用于 TCPing 检测)
+* `lua` & `luci-base` (内置 nixio 库，用于高精度 TCPing)
 
 ## 版本说明
 
+* **v1.0.17**: 重写 TCPing 逻辑为纯 Lua 实现，移除 socat 依赖，实现微秒级高精度计时。
 * **v1.0.16**: 迁移至 socat 以解决编译超时问题，大幅减小体积。
 * **v1.0.15**: 优化 TCPing 的 IPv6 兼容性，改用 ncat 作为首选工具。
 * **v1.0.13**: 新增 TCPing 功能支持；支持 IPv6；自动迁移旧数据。
