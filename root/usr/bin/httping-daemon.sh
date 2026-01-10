@@ -43,8 +43,7 @@ check_server() {
                 RETCODE=1
 
                 if [ "$type" = "tcping" ]; then
-                    # TCPing 处理逻辑 - 纯 Lua 实现 (高精度，微秒级)
-                    # 支持 IPv6 格式: [2001:db8::1]:80 或 host:port
+                    # TCPing 混合方案: Lua 计时 + socat 连接 (高精度 + 极高稳定性)
                     if echo "$url" | grep -q "\["; then
                         HOST=$(echo "$url" | sed -n 's/.*\[\(.*\)\].*/\1/p')
                         PORT=$(echo "$url" | sed -n 's/.*\]:\(.*\)/\1/p')
@@ -55,72 +54,33 @@ check_server() {
                     
                     if [ -z "$PORT" ] || [ "$HOST" = "$PORT" ]; then PORT=80; fi
                     
-                    # 使用 Lua 进行高精度测速 (依赖系统自带的 nixio 库)
-                    # 返回结果: "OK 45.123" 或 "FAIL"
+                    # 嵌入式 Lua 脚本
                     LUA_SCRIPT="
                     local nixio = require 'nixio'
                     local host = '$HOST'
-                    local port = '$PORT'
+                    local port = tonumber('$PORT')
+                    local addr_iter = nixio.getaddrinfo(host)
+                    if not addr_iter or not addr_iter[1] then print('FAIL DNS'); return end
                     
-                    local sock, err
-                    -- 1. 解析地址 (支持 IPv4/IPv6)
-                    local addr_iter = nixio.getaddrinfo(host, 'inet') or nixio.getaddrinfo(host, 'inet6')
-                    if not addr_iter then
-                        addr_iter = nixio.getaddrinfo(host) -- 尝试自动
-                    end
-
-                    if not addr_iter or not addr_iter[1] then
-                        print('FAIL')
-                        return
+                    local addr = addr_iter[1].address
+                    local socat_cmd
+                    if string.find(addr, ':') then
+                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP6:[%%s]:%%d,connect-timeout=2', addr, port)
+                    else
+                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP4:%%s:%%d,connect-timeout=2', addr, port)
                     end
                     
-                    local target = addr_iter[1]
-                    target.port = tonumber(port)
-
-                    -- 2. 创建 Socket
-                    sock = nixio.socket(target.family, nixio.SOCK_STREAM)
-                    if not sock then print('FAIL'); return end
-                    
-                    sock:setblocking(false) -- 非阻塞模式
-                    
-                    -- 3. 开始计时
                     local t1_sec, t1_usec = nixio.gettimeofday()
-                    
-                    -- 4. 发起连接
-                    local status, code, msg = sock:connect(target.address, target.port)
-                    
-                    -- 5. 等待连接 (select)
-                    if status ~= true then
-                        -- 如果不是立即连接成功，需要 poll 状态
-                        if code == nixio.EINPROGRESS then
-                            local revents = nixio.poll({ {fd=sock, events=nixio.POLLOUT} }, 2000) -- 2秒超时
-                            if not revents or revents == 0 then
-                                print('FAIL') -- 超时
-                                sock:close()
-                                return
-                            end
-                            
-                            -- 再次检查错误状态
-                            local err_code = sock:getsockopt('socket', 'error')
-                            if err_code ~= 0 then
-                                print('FAIL')
-                                sock:close()
-                                return
-                            end
-                        else
-                            print('FAIL')
-                            sock:close()
-                            return
-                        end
-                    end
-                    
-                    -- 6. 结束计时
+                    local ret = os.execute(socat_cmd)
                     local t2_sec, t2_usec = nixio.gettimeofday()
-                    sock:close()
                     
-                    -- 计算差值 (毫秒)
-                    local ms = (t2_sec - t1_sec) * 1000 + (t2_usec - t1_usec) / 1000
-                    print(string.format('OK %.3f', ms))
+                    -- OpenWrt 上的 os.execute 返回值处理 (0 为成功)
+                    if ret == 0 then
+                        local ms = (t2_sec - t1_sec) * 1000 + (t2_usec - t1_usec) / 1000
+                        print(string.format('OK %%.3f', ms))
+                    else
+                        print('FAIL')
+                    end
                     "
                     
                     RESULT=$(lua -l nixio -e "$LUA_SCRIPT")

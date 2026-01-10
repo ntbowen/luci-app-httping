@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-httping
-PKG_VERSION:=1.0.17
+PKG_VERSION:=1.0.18
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=No Name
@@ -15,7 +15,7 @@ define Package/luci-app-httping
   SUBMENU:=3. Applications
   TITLE:=LuCI support for Network Latency Monitor (HTTPing)
   PKGARCH:=all
-  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli
+  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli +socat
 endef
 
 define Package/luci-app-httping/description
