@@ -77,7 +77,7 @@ check_server() {
                     -- OpenWrt 上的 os.execute 返回值处理 (0 为成功)
                     if ret == 0 then
                         local ms = (t2_sec - t1_sec) * 1000 + (t2_usec - t1_usec) / 1000
-                        print(string.format('OK %%.3f', ms))
+                        print(string.format('OK %.3f', ms))
                     else
                         print('FAIL')
                     end
