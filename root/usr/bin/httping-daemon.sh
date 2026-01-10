@@ -65,9 +65,9 @@ check_server() {
                     local addr = addr_iter[1].address
                     local socat_cmd
                     if string.find(addr, ':') then
-                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP6:[%%s]:%%d,connect-timeout=2', addr, port)
+                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP6:[%s]:%d,connect-timeout=2', addr, port)
                     else
-                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP4:%%s:%%d,connect-timeout=2', addr, port)
+                        socat_cmd = string.format('socat -u OPEN:/dev/null TCP4:%s:%d,connect-timeout=2', addr, port)
                     end
                     
                     local t1_sec, t1_usec = nixio.gettimeofday()
