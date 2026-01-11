@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-httping
-PKG_VERSION:=1.0.20
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=No Name
@@ -15,7 +15,7 @@ define Package/luci-app-httping
   SUBMENU:=3. Applications
   TITLE:=LuCI support for Network Latency Monitor (HTTPing)
   PKGARCH:=all
-  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli +socat
+  DEPENDS:=+luci-base +luci-lib-jsonc +curl +sqlite3-cli
 endef
 
 define Package/luci-app-httping/description
@@ -41,7 +41,7 @@ define Package/luci-app-httping/install
 
 	$(INSTALL_CONF) ./root/etc/config/httping $(1)/etc/config/httping
 	$(INSTALL_BIN) ./root/etc/init.d/httping $(1)/etc/init.d/httping
-	$(INSTALL_BIN) ./root/usr/bin/httping-daemon.sh $(1)/usr/bin/httping-daemon.sh
+	$(INSTALL_BIN) ./root/usr/bin/httping-daemon.lua $(1)/usr/bin/httping-daemon.lua
 	
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/controller/httping.lua $(1)/usr/lib/lua/luci/controller/httping.lua
 	$(INSTALL_DATA) ./root/usr/lib/lua/luci/model/cbi/httping/setting.lua $(1)/usr/lib/lua/luci/model/cbi/httping/setting.lua
@@ -52,7 +52,7 @@ endef
 define Package/luci-app-httping/postinst
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
-    chmod +x /usr/bin/httping-daemon.sh
+    chmod +x /usr/bin/httping-daemon.lua
     chmod +x /etc/init.d/httping
     /etc/init.d/httping enable
     /etc/init.d/httping start

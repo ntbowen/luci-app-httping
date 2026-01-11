@@ -26,11 +26,11 @@
 * `luci-lib-jsonc`
 * `curl` (用于 HTTP/HTTPS 检测)
 * `sqlite3-cli` (用于数据存储)
-* `socat` (用于高稳定性 TCPing 连接)
 * `lua` & `luci-base` (内置 nixio 库，用于高精度计时)
 
 ## 版本说明
 
+* **v1.1.0**: 重大架构升级：守护进程重构为纯 Lua 实现，移除了对 `socat` 的依赖，大幅优化性能和资源占用。
 * **v1.0.20**: 修复 Lua 输出格式化问题 (%.3f)，彻底解决数据记录失败的 bug。
 * **v1.0.19**: 修复 Lua 脚本中的格式化字符串错误，解决 TCPing 丢包问题。
 * **v1.0.18**: 采用 Lua + socat 混合方案，兼顾高精度计时与极致的连接稳定性。
@@ -128,7 +128,7 @@ opkg install luci-app-httping_*.ipk
 ## 目录结构说明
 
 * `/etc/config/httping`: 配置文件。
-* `/usr/bin/httping-daemon.sh`: 后台监控守护脚本。
+* `/usr/bin/httping-daemon.lua`: 后台监控守护脚本 (Lua)。
 * `/etc/httping_data.db`: SQLite 数据库文件（默认位置）。
 
 ## License
