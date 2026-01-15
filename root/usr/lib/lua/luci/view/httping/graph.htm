@@ -526,6 +526,42 @@
             // silent
         }
 
+        // 【关键逻辑】计算 Y 轴范围以使平滑曲线居中
+        var yAxisMin = null;
+        var yAxisMax = null;
+
+        if (isClippingMode) {
+            var lineMin = Infinity;
+            var lineMax = -Infinity;
+            var hasLineData = false;
+
+            // 仅遍历 Line 数据 (groupedData)
+            seriesList.forEach(function(series) {
+                if (series.type === 'line' && series.data && series.data.length > 0) {
+                    series.data.forEach(function(pt) {
+                        var val = pt.value ? pt.value[1] : null;
+                        if (val !== null && val !== undefined) {
+                            if (val < lineMin) lineMin = val;
+                            if (val > lineMax) lineMax = val;
+                            hasLineData = true;
+                        }
+                    });
+                }
+            });
+
+            if (hasLineData) {
+                var range = lineMax - lineMin;
+                if (range <= 0) range = lineMax * 0.1 || 5; 
+                
+                // 上下各留 0.8 倍 Range 的 Padding，使曲线处于中间 1/2.6 区域
+                var padding = range * 0.8;
+                
+                yAxisMin = Math.max(0, lineMin - padding);
+                yAxisMax = lineMax + padding;
+            }
+        }
+
+        // 【关键逻辑】获取当前缩放状态
         var startZoom = 0;
         var endZoom = 100;
         if (preserveZoom && myChart) {
@@ -590,11 +626,11 @@
                 scale: true,
                 axisLabel: { color: theme.textColor, formatter: '{value} ms' },
                 splitLine: { lineStyle: { color: theme.splitLine } },
-                // 自动适应数据范围
-                min: function(value) {
+                // 自动适应数据范围，平滑模式下使用手动计算的范围以居中显示
+                min: yAxisMin !== null ? yAxisMin : function(value) {
                     return Math.floor(value.min / 10) * 10;
                 },
-                max: function(value) {
+                max: yAxisMax !== null ? yAxisMax : function(value) {
                     return Math.ceil(value.max / 10) * 10;
                 }
             },
