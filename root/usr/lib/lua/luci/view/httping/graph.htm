@@ -279,7 +279,8 @@
     var isClippingMode = false;
 
     var colorPalette = [
-        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+        '#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#3B3EAC', '#0099C6', '#DD4477', '#66AA00', '#B82E2E',
+        '#316395', '#994499', '#22AA99', '#AAAA11', '#6633CC', '#E67300', '#8B0707', '#329262', '#5574A6'
     ];
 
     function isDarkMode() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
@@ -519,8 +520,6 @@
                     z: 10
                 });
             }
-
-            colorIdx++;
         });
 
         if (seriesList.length === 0 && isFilterMode) {
